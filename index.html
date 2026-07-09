@@ -768,70 +768,87 @@
         }
 
         function exportAsImage() {
-            const svgElement = document.getElementById('interactive-map');
-            if (!svgElement) return;
+    const svg = document.getElementById("interactive-map");
+    if (!svg) return;
 
-            const svgClone = svgElement.cloneNode(true);
-            svgClone.querySelectorAll('.selected-region').forEach(el => el.classList.remove('selected-region'));
-            svgClone.removeAttribute('id');
+    const clone = svg.cloneNode(true);
 
-            if (!svgClone.getAttribute('xmlns')) {
-                svgClone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
-            }
+    clone.querySelectorAll(".selected-region").forEach(el =>
+        el.classList.remove("selected-region")
+    );
+    clone.removeAttribute("id");
 
-            const serializer = new XMLSerializer();
-            const svgString = serializer.serializeToString(svgClone);
+    clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+    clone.setAttribute("xmlns:xlink", "http://www.w3.org/1999/xlink");
 
-            const viewBox = svgElement.viewBox.baseVal;
-            let width = svgElement.width.baseVal.value || viewBox.width;
-            let height = svgElement.height.baseVal.value || viewBox.height;
+    // Get size
+    let width, height;
 
-            if (!width || !height) {
-                const bbox = svgElement.getBBox();
-                width = bbox.width || 800;
-                height = bbox.height || 600;
-            }
+    if (svg.viewBox && svg.viewBox.baseVal.width > 0) {
+        width = svg.viewBox.baseVal.width;
+        height = svg.viewBox.baseVal.height;
+    } else {
+        const box = svg.getBBox();
+        width = Math.ceil(box.width);
+        height = Math.ceil(box.height);
 
-            const canvas = document.createElement('canvas');
-            canvas.width = width * 2; 
-            canvas.height = height * 2;
-            const ctx = canvas.getContext('2d');
-            ctx.scale(2, 2);
+        clone.setAttribute(
+            "viewBox",
+            `${box.x} ${box.y} ${box.width} ${box.height}`
+        );
+    }
 
-            const img = new Image();
-            
-            // blob compatible con caracteres UTF-8 (acentos, ñ, etc.)
-            const svgBlob = new Blob([svgString], {type: 'image/svg+xml;charset=utf-8'});
-            const url = URL.createObjectURL(svgBlob);
+    clone.setAttribute("width", width);
+    clone.setAttribute("height", height);
 
-            img.onload = function() {
-                ctx.fillStyle = '#ffffff';
-                ctx.fillRect(0, 0, width, height);
-                ctx.drawImage(img, 0, 0, width, height);
+    const svgData = new XMLSerializer().serializeToString(clone);
 
-                try {
-                    const pngUrl = canvas.toDataURL('image/png');
-                    const downloadLink = document.createElement("a");
-                    downloadLink.href = pngUrl;
-                    downloadLink.download = "mapa_renderizado.png";
-                    
-                    document.body.appendChild(downloadLink);
-                    downloadLink.click();
-                    document.body.removeChild(downloadLink);
-                } catch (err) {
-                    alert("Error generando la imagen rasterizada: " + err.message);
-                } finally {
-                    URL.revokeObjectURL(url);
-                }
-            };
+    const blob = new Blob([svgData], {
+        type: "image/svg+xml;charset=utf-8"
+    });
 
-            img.onerror = function() {
-                alert("No se pudo parsear el SVG a imagen. Verifica que el archivo no contenga scripts externos o fuentes rotas.");
-                URL.revokeObjectURL(url);
-            };
+    const url = URL.createObjectURL(blob);
 
-            img.src = url;
-        }
+    const img = new Image();
+
+    img.onload = function () {
+
+        const scale = 4; // higher resolution
+
+        const canvas = document.createElement("canvas");
+        canvas.width = width * scale;
+        canvas.height = height * scale;
+
+        const ctx = canvas.getContext("2d");
+
+        ctx.scale(scale, scale);
+
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, width, height);
+
+        ctx.drawImage(img, 0, 0, width, height);
+
+        URL.revokeObjectURL(url);
+
+        canvas.toBlob(function(blob) {
+
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.download = "mapa.png";
+            link.click();
+
+            URL.revokeObjectURL(link.href);
+
+        }, "image/png");
+    };
+
+    img.onerror = function () {
+        URL.revokeObjectURL(url);
+        alert("Couldn't render the SVG.");
+    };
+
+    img.src = url;
+}
 
         function rgbToHex(rgbStr) {
             if (!rgbStr || !rgbStr.startsWith('rgb')) return null;
