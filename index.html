@@ -505,25 +505,27 @@
         let selectedElements = [];
         let currentScale = 1;
 
-        // Al iniciar la app, comprueba si hay un mapa guardado en LocalStorage
         window.addEventListener('DOMContentLoaded', () => {
             const savedSvg = localStorage.getItem('editor_saved_svg');
             if (savedSvg) {
                 document.getElementById('svgInput').value = savedSvg;
-                loadUserSVG(false); // Carga sin sobreescribir el storage de nuevo redundantemente
+                loadUserSVG(false); 
             }
         });
 
-        function saveToStorage() {
+        function syncTextareaAndStorage() {
             const svgElement = document.getElementById('interactive-map');
             if (!svgElement) return;
             
-            // Clonamos para remover temporalmente las clases de selección antes de guardar
             const clone = svgElement.cloneNode(true);
             clone.querySelectorAll('.selected-region').forEach(el => el.classList.remove('selected-region'));
+            clone.removeAttribute('id'); // Quitar ID temporal del editor antes de serializar
             
             const serializer = new XMLSerializer();
             const svgString = serializer.serializeToString(clone);
+            
+            // Actualiza tanto el almacenamiento local como el cuadro de texto dinámicamente
+            document.getElementById('svgInput').value = svgString;
             localStorage.setItem('editor_saved_svg', svgString);
         }
 
@@ -559,7 +561,7 @@
                 const doc = parser.parseFromString(rawSvgText, 'image/svg+xml');
                 const svgNode = doc.querySelector('svg');
 
-                if (!svgNode) throw new Error("Código SVG no válido.");
+                if (!svgNode) throw new Error("Código SVG no válido o incompleto.");
 
                 svgNode.setAttribute('id', 'interactive-map');
 
@@ -589,7 +591,7 @@
                 exportGroup.classList.remove('hidden');
                 toolbarStatus.textContent = "Vista del mapa interactivo";
 
-                if(shouldSave) saveToStorage();
+                if(shouldSave) syncTextareaAndStorage();
 
             } catch (error) {
                 alert("Error al procesar el SVG: " + error.message);
@@ -655,7 +657,7 @@
                 currentColor = rgbToHex(last.getAttribute('fill')) || last.getAttribute('fill');
             }
 
-            if (currentColor.startsWith('#')) {
+            if (currentColor && currentColor.startsWith('#')) {
                 if (currentColor.length === 4) {
                     currentColor = '#' + currentColor[1] + currentColor[1] + currentColor[2] + currentColor[2] + currentColor[3] + currentColor[3];
                 }
@@ -692,7 +694,7 @@
 
             const badge = document.getElementById('selectionBadge');
             badge.textContent = `${selectedElements.length} Regiones seleccionadas`;
-            saveToStorage();
+            syncTextareaAndStorage();
         }
 
         function applyPreset(hexColor) {
@@ -713,7 +715,7 @@
                     element.setAttribute("fill", hexColor);
                 }
             });
-            saveToStorage();
+            syncTextareaAndStorage();
         }
 
         function updateRegionTitle(newTitle) {
@@ -726,10 +728,10 @@
                 } else {
                     titleElement = document.createElementNS("http://www.w3.org/2000/svg", "title");
                     titleElement.textContent = newTitle;
-                    element.appendChild(titleElement);
+                    element.insertBefore(titleElement, element.firstChild);
                 }
             });
-            saveToStorage();
+            syncTextareaAndStorage();
         }
 
         function exportModifiedSVG() {
@@ -738,6 +740,12 @@
 
             const svgClone = svgElement.cloneNode(true);
             svgClone.querySelectorAll('.selected-region').forEach(el => el.classList.remove('selected-region'));
+            svgClone.removeAttribute('id'); // Limpiar atributos del editor interno
+
+            // Asegurar que cuente con namespaces básicos de renderizado global
+            if (!svgClone.getAttribute('xmlns')) {
+                svgClone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+            }
 
             const serializer = new XMLSerializer();
             let svgString = serializer.serializeToString(svgClone);
@@ -746,6 +754,7 @@
                 svgString = '<?xml version="1.0" encoding="utf-8"?>\n' + svgString;
             }
 
+            // Usar Blob nativo con set de caracteres UTF-8 correcto
             const blob = new Blob([svgString], {type: "image/svg+xml;charset=utf-8"});
             const url = URL.createObjectURL(blob);
             const downloadLink = document.createElement("a");
@@ -755,49 +764,69 @@
             document.body.appendChild(downloadLink);
             downloadLink.click();
             document.body.removeChild(downloadLink);
+            URL.revokeObjectURL(url);
         }
 
-        // NUEVO: Renderiza el mapa SVG actual en un Canvas HTML5 y lo baja como PNG de alta calidad
         function exportAsImage() {
             const svgElement = document.getElementById('interactive-map');
             if (!svgElement) return;
 
-            // Limpiamos la selección del clon para que no baje con el borde azul brillante
             const svgClone = svgElement.cloneNode(true);
             svgClone.querySelectorAll('.selected-region').forEach(el => el.classList.remove('selected-region'));
+            svgClone.removeAttribute('id');
+
+            if (!svgClone.getAttribute('xmlns')) {
+                svgClone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+            }
 
             const serializer = new XMLSerializer();
             const svgString = serializer.serializeToString(svgClone);
 
-            // Obtenemos dimensiones nativas del mapa
-            const bbox = svgElement.getBBox();
-            const width = svgElement.width.baseVal.value || bbox.width || 800;
-            const height = svgElement.height.baseVal.value || bbox.height || 600;
+            const viewBox = svgElement.viewBox.baseVal;
+            let width = svgElement.width.baseVal.value || viewBox.width;
+            let height = svgElement.height.baseVal.value || viewBox.height;
+
+            if (!width || !height) {
+                const bbox = svgElement.getBBox();
+                width = bbox.width || 800;
+                height = bbox.height || 600;
+            }
 
             const canvas = document.createElement('canvas');
-            canvas.width = width * 2; // Multiplicador x2 para nitidez HD
+            canvas.width = width * 2; 
             canvas.height = height * 2;
             const ctx = canvas.getContext('2d');
             ctx.scale(2, 2);
 
             const img = new Image();
+            
+            // blob compatible con caracteres UTF-8 (acentos, ñ, etc.)
             const svgBlob = new Blob([svgString], {type: 'image/svg+xml;charset=utf-8'});
             const url = URL.createObjectURL(svgBlob);
 
             img.onload = function() {
-                // Pintamos fondo blanco liso para evitar transparencias rotas en JPG/PNG
                 ctx.fillStyle = '#ffffff';
                 ctx.fillRect(0, 0, width, height);
                 ctx.drawImage(img, 0, 0, width, height);
 
-                const pngUrl = canvas.toDataURL('image/png');
-                const downloadLink = document.createElement("a");
-                downloadLink.href = pngUrl;
-                downloadLink.download = "mapa_renderizado.png";
-                
-                document.body.appendChild(downloadLink);
-                downloadLink.click();
-                document.body.removeChild(downloadLink);
+                try {
+                    const pngUrl = canvas.toDataURL('image/png');
+                    const downloadLink = document.createElement("a");
+                    downloadLink.href = pngUrl;
+                    downloadLink.download = "mapa_renderizado.png";
+                    
+                    document.body.appendChild(downloadLink);
+                    downloadLink.click();
+                    document.body.removeChild(downloadLink);
+                } catch (err) {
+                    alert("Error generando la imagen rasterizada: " + err.message);
+                } finally {
+                    URL.revokeObjectURL(url);
+                }
+            };
+
+            img.onerror = function() {
+                alert("No se pudo parsear el SVG a imagen. Verifica que el archivo no contenga scripts externos o fuentes rotas.");
                 URL.revokeObjectURL(url);
             };
 
