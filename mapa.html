@@ -1,0 +1,819 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Editor de Mapas SVG Premium</title>
+    <style>
+        :root {
+            --bg-main: #f8fafc;
+            --bg-panel: #ffffff;
+            --text-main: #1e293b;
+            --text-muted: #64748b;
+            --accent: #3b82f6;
+            --accent-hover: #2563eb;
+            --success: #10b981;
+            --border-color: #e2e8f0;
+            --radius: 12px;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            margin: 0;
+            padding: 24px;
+            background-color: var(--bg-main);
+            color: var(--text-main);
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            box-sizing: border-box;
+        }
+
+        header {
+            margin-bottom: 20px;
+        }
+
+        h1 {
+            margin: 0;
+            color: var(--text-main);
+            font-size: 26px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+
+        p.subtitle {
+            margin: 4px 0 0 0;
+            color: var(--text-muted);
+            font-size: 14px;
+        }
+
+        .container {
+            display: flex;
+            gap: 24px;
+            flex: 1;
+            min-height: 0;
+        }
+
+        .left-panel {
+            flex: 3;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            min-height: 0;
+        }
+
+        .card {
+            background: var(--bg-panel);
+            border-radius: var(--radius);
+            padding: 20px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03), 0 1px 3px rgba(0, 0, 0, 0.02);
+            border: 1px solid var(--border-color);
+        }
+
+        .paste-box {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .input-actions {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        textarea {
+            width: 100%;
+            height: 90px;
+            padding: 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            box-sizing: border-box;
+            font-family: 'Fira Code', monospace;
+            resize: none;
+            font-size: 12px;
+            background-color: #fafafa;
+            color: #334155;
+            transition: border-color 0.2s;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        .file-upload-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 10px 16px;
+            background-color: #f1f5f9;
+            color: #334155;
+            border-radius: 6px;
+            font-weight: 500;
+            font-size: 14px;
+            cursor: pointer;
+            border: 1px solid var(--border-color);
+            transition: background-color 0.2s;
+        }
+
+        .file-upload-btn:hover {
+            background-color: #e2e8f0;
+        }
+
+        .map-card {
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+            min-height: 300px;
+            padding: 0;
+            overflow: hidden;
+        }
+
+        .map-toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 20px;
+            border-bottom: 1px solid var(--border-color);
+            background: #fafafa;
+            border-top-left-radius: var(--radius);
+            border-top-right-radius: var(--radius);
+        }
+
+        .map-toolbar-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-muted);
+        }
+
+        .map-panel {
+            flex: 1;
+            position: relative;
+            overflow: auto;
+            display: flex;
+            align-items: flex-start;
+            justify-content: flex-start;
+            background: #ffffff;
+            background-image: radial-gradient(#e2e8f0 1px, transparent 1px);
+            background-size: 16px 16px;
+        }
+
+        #svgWrapper {
+            transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+            display: inline-block;
+            padding: 20px;
+            transform-origin: top left;
+        }
+
+        .zoom-controls {
+            display: flex;
+            background: var(--bg-panel);
+            padding: 2px;
+            border-radius: 6px;
+            gap: 2px;
+            border: 1px solid var(--border-color);
+        }
+
+        .zoom-btn {
+            width: 28px;
+            height: 28px;
+            padding: 0;
+            background: transparent;
+            color: var(--text-main);
+            border: none;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transition: background-color 0.15s;
+        }
+
+        .zoom-btn:hover {
+            background-color: #f1f5f9;
+            color: var(--accent);
+        }
+
+        .map-panel svg path, 
+        .map-panel svg rect, 
+        .map-panel svg polygon, 
+        .map-panel svg circle,
+        .map-panel svg g > * {
+            cursor: pointer;
+            transition: filter 0.15s, stroke 0.15s;
+        }
+
+        .map-panel svg path:hover, 
+        .map-panel svg rect:hover, 
+        .map-panel svg polygon:hover, 
+        .map-panel svg circle:hover,
+        .map-panel svg g > *:hover {
+            filter: brightness(0.9);
+            stroke: #000000 !important;
+            stroke-width: 1.5px !important;
+        }
+
+        .selected-region {
+            stroke: #3b82f6 !important;
+            stroke-width: 3px !important;
+            filter: drop-shadow(0 0 4px rgba(59, 130, 246, 0.5)) !important;
+        }
+
+        .editor-panel {
+            width: 320px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            height: 100%;
+        }
+
+        .editor-title {
+            margin: 0 0 10px 0;
+            font-size: 18px;
+            color: var(--text-main);
+            font-weight: 600;
+        }
+
+        .panel-section {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            margin-bottom: 14px;
+        }
+
+        label {
+            font-size: 13px;
+            font-weight: 600;
+            color: #475569;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            box-sizing: border-box;
+            font-size: 14px;
+            color: var(--text-main);
+            background-color: #f8fafc;
+        }
+
+        input[type="text"]:focus {
+            outline: none;
+            border-color: var(--accent);
+            background-color: #fff;
+        }
+
+        .presets-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+
+        .preset-btn {
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 8px 4px;
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 6px;
+            background: #fff;
+            transition: background-color 0.15s, transform 0.1s;
+        }
+
+        .preset-btn:hover {
+            background-color: #f8fafc;
+            transform: translateY(-1px);
+        }
+
+        .preset-color-sample {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            border: 1px solid rgba(0,0,0,0.1);
+        }
+
+        .color-picker-container {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            border-top: 1px dashed var(--border-color);
+            padding-top: 12px;
+            margin-top: 4px;
+        }
+
+        input[type="color"] {
+            -webkit-appearance: none;
+            border: none;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            cursor: pointer;
+            background: none;
+            padding: 0;
+        }
+
+        input[type="color"]::-webkit-color-swatch-wrapper {
+            padding: 0;
+        }
+
+        input[type="color"]::-webkit-color-swatch {
+            border: 2px solid var(--border-color);
+            border-radius: 50%;
+        }
+
+        .btn-smart-group {
+            background-color: #f1f5f9;
+            color: #475569;
+            border: 1px dashed #cbd5e1;
+            padding: 8px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 2px;
+            transition: all 0.15s;
+        }
+
+        .btn-smart-group:hover {
+            background-color: #e2e8f0;
+            color: var(--accent);
+            border-color: var(--accent);
+        }
+
+        button.btn-block {
+            width: 100%;
+            padding: 12px;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: background-color 0.15s, transform 0.1s;
+            display: inline-flex;
+            justify-content: center;
+            align-items: center;
+            gap: 8px;
+        }
+
+        button.btn-block:active {
+            transform: scale(0.98);
+        }
+
+        .btn-load { background-color: var(--success); }
+        .btn-load:hover { background-color: #059669; }
+        
+        .btn-export { background-color: var(--accent); }
+        .btn-export:hover { background-color: var(--accent-hover); }
+
+        .btn-export-img { background-color: #64748b; margin-top: 4px; }
+        .btn-export-img:hover { background-color: #475569; }
+
+        .hint {
+            font-size: 12px;
+            color: var(--text-muted);
+            line-height: 1.4;
+            margin: 2px 0 0 0;
+        }
+
+        .hidden { display: none !important; }
+        
+        .badge {
+            background-color: #eff6ff;
+            color: var(--accent);
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+            display: inline-block;
+            margin-bottom: 5px;
+            width: fit-content;
+        }
+
+        .export-group {
+            margin-top: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>Editor Avanzado de Mapas SVG</h1>
+        <p class="subtitle">Importa, personaliza tus vectores y exporta como SVG o imagen sin perder cambios.</p>
+    </header>
+    
+    <div class="container">
+        <div class="left-panel">
+            <div class="card paste-box">
+                <label for="svgInput">1. Introduce el mapa en formato SVG:</label>
+                <textarea id="svgInput" placeholder="Pega aquí el código que empieza con <svg>..."></textarea>
+                
+                <div class="input-actions">
+                    <button class="btn-block btn-load" style="width: auto; flex: 1;" onclick="loadUserSVG(true)">Cargar Mapa</button>
+                    <label class="file-upload-btn">
+                        📁 Subir archivo .svg
+                        <input type="file" id="fileInput" accept=".svg" class="hidden" onchange="handleFileUpload(event)">
+                    </label>
+                </div>
+            </div>
+            
+            <div class="card map-card">
+                <div class="map-toolbar">
+                    <span class="map-toolbar-title" id="toolbarStatus">Lienzo vacío</span>
+                    <div class="zoom-controls hidden" id="zoomControls">
+                        <button class="zoom-btn" onclick="zoomMap(0.2)" title="Acercar">+</button>
+                        <button class="zoom-btn" onclick="zoomMap(-0.2)" title="Alejar">-</button>
+                        <button class="zoom-btn" onclick="resetZoom()" title="Restablecer vista">🔄</button>
+                    </div>
+                </div>
+                <div class="map-panel" id="mapContainer">
+                    <p class="hint" id="noMapHint" style="font-size: 14px; text-align: center; margin: auto; width: 100%;">Por favor, sube un archivo o pega el código SVG para renderizar el lienzo.</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card editor-panel">
+            <h2 class="editor-title">2. Propiedades</h2>
+            
+            <div id="editorControls" class="hidden" style="display: flex; flex-direction: column; flex: 1; min-height: 0;">
+                <div id="selectionBadge" class="badge">1 Región seleccionada</div>
+                
+                <div class="panel-section">
+                    <p class="hint">Tip: Mantén presionado <strong>Shift</strong> para seleccionar múltiples regiones.</p>
+                </div>
+
+                <div class="panel-section">
+                    <label>ID del Elemento:</label>
+                    <input type="text" id="regionId" disabled style="background-color: #f1f5f9; color: #94a3b8; cursor: not-allowed;">
+                    <button id="smartGroupBtn" class="btn-smart-group" onclick="selectEntireBox()">📦 Seleccionar todo en este recuadro</button>
+                </div>
+
+                <div class="panel-section">
+                    <label>Color de Relleno:</label>
+                    <div class="presets-grid">
+                        <button class="preset-btn" onclick="applyPreset('#1CB24B')">
+                            <div class="preset-color-sample" style="background-color: #1CB24B;"></div>
+                            Green
+                        </button>
+                        <button class="preset-btn" onclick="applyPreset('#D50000')">
+                            <div class="preset-color-sample" style="background-color: #D50000;"></div>
+                            Red
+                        </button>
+                        <button class="preset-btn" onclick="applyPreset('#FFC306')">
+                            <div class="preset-color-sample" style="background-color: #FFC306;"></div>
+                            Yellow
+                        </button>
+                    </div>
+                    
+                    <div class="color-picker-container">
+                        <label for="regionColor" style="font-weight: normal; font-size: 12px;">Personalizado:</label>
+                        <input type="color" id="regionColor" oninput="updateRegionColor(this.value)">
+                        <span id="colorHexLabel" class="hint" style="font-family: monospace; font-size: 13px;">#FFFFFF</span>
+                    </div>
+                </div>
+
+                <div class="panel-section">
+                    <label for="regionTitle">Etiqueta Informativa (&lt;title&gt;):</label>
+                    <input type="text" id="regionTitle" placeholder="Ej. Nombre del país o región" oninput="updateRegionTitle(this.value)">
+                </div>
+            </div>
+
+            <div id="noSelectionHint" class="hint" style="text-align: center; margin: auto 0; padding: 20px 0;">
+                Sube un mapa y haz clic sobre cualquier zona para desplegar sus parámetros editables.
+            </div>
+
+            <div class="export-group hidden" id="exportGroup">
+                <button class="btn-block btn-export" onclick="exportModifiedSVG()">💾 Exportar SVG Limpio</button>
+                <button class="btn-block btn-export-img" onclick="exportAsImage()">🖼️ Descargar como Imagen (.png)</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let selectedElements = [];
+        let currentScale = 1;
+
+        // Al iniciar la app, comprueba si hay un mapa guardado en LocalStorage
+        window.addEventListener('DOMContentLoaded', () => {
+            const savedSvg = localStorage.getItem('editor_saved_svg');
+            if (savedSvg) {
+                document.getElementById('svgInput').value = savedSvg;
+                loadUserSVG(false); // Carga sin sobreescribir el storage de nuevo redundantemente
+            }
+        });
+
+        function saveToStorage() {
+            const svgElement = document.getElementById('interactive-map');
+            if (!svgElement) return;
+            
+            // Clonamos para remover temporalmente las clases de selección antes de guardar
+            const clone = svgElement.cloneNode(true);
+            clone.querySelectorAll('.selected-region').forEach(el => el.classList.remove('selected-region'));
+            
+            const serializer = new XMLSerializer();
+            const svgString = serializer.serializeToString(clone);
+            localStorage.setItem('editor_saved_svg', svgString);
+        }
+
+        function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                document.getElementById('svgInput').value = e.target.result;
+                loadUserSVG(true);
+            };
+            reader.readAsText(file);
+        }
+
+        function loadUserSVG(shouldSave = true) {
+            const rawSvgText = document.getElementById('svgInput').value.trim();
+            const container = document.getElementById('mapContainer');
+            const noMapHint = document.getElementById('noMapHint');
+            const editorControls = document.getElementById('editorControls');
+            const noSelectionHint = document.getElementById('noSelectionHint');
+            const exportGroup = document.getElementById('exportGroup');
+            const zoomControls = document.getElementById('zoomControls');
+            const toolbarStatus = document.getElementById('toolbarStatus');
+
+            if (!rawSvgText) return;
+
+            selectedElements = [];
+            currentScale = 1;
+
+            try {
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(rawSvgText, 'image/svg+xml');
+                const svgNode = doc.querySelector('svg');
+
+                if (!svgNode) throw new Error("Código SVG no válido.");
+
+                svgNode.setAttribute('id', 'interactive-map');
+
+                const wrapper = document.createElement('div');
+                wrapper.setAttribute('id', 'svgWrapper');
+                wrapper.appendChild(svgNode);
+
+                if (noMapHint) noMapHint.remove();
+                const oldWrapper = document.getElementById('svgWrapper');
+                if (oldWrapper) oldWrapper.remove();
+                
+                container.appendChild(wrapper);
+
+                const paths = svgNode.querySelectorAll('path, rect, polygon, circle, g > *');
+                paths.forEach(element => {
+                    if(element.tagName.toLowerCase() !== 'g' && element.tagName.toLowerCase() !== 'title') {
+                        element.addEventListener("click", function(e) {
+                            e.stopPropagation();
+                            selectElement(this, e.shiftKey);
+                        });
+                    }
+                });
+
+                editorControls.classList.remove('hidden');
+                zoomControls.classList.remove('hidden');
+                noSelectionHint.classList.add('hidden');
+                exportGroup.classList.remove('hidden');
+                toolbarStatus.textContent = "Vista del mapa interactivo";
+
+                if(shouldSave) saveToStorage();
+
+            } catch (error) {
+                alert("Error al procesar el SVG: " + error.message);
+            }
+        }
+
+        function zoomMap(amount) {
+            const wrapper = document.getElementById('svgWrapper');
+            if (!wrapper) return;
+            currentScale = Math.min(Math.max(currentScale + amount, 0.4), 5);
+            wrapper.style.transform = `scale(${currentScale})`;
+        }
+
+        function resetZoom() {
+            const wrapper = document.getElementById('svgWrapper');
+            if (!wrapper) return;
+            currentScale = 1;
+            wrapper.style.transform = `scale(1)`;
+        }
+
+        function selectElement(element, multiSelect = false) {
+            if (!multiSelect) {
+                selectedElements.forEach(el => el.classList.remove('selected-region'));
+                selectedElements = [];
+            }
+
+            if (multiSelect && selectedElements.includes(element)) {
+                element.classList.remove('selected-region');
+                selectedElements = selectedElements.filter(el => el !== element);
+            } else if (!selectedElements.includes(element)) {
+                selectedElements.push(element);
+                element.classList.add('selected-region');
+            }
+
+            const badge = document.getElementById('selectionBadge');
+            if (selectedElements.length === 0) {
+                document.getElementById('regionId').value = "";
+                document.getElementById('regionTitle').value = "";
+                badge.classList.add('hidden');
+                return;
+            }
+
+            badge.classList.remove('hidden');
+            badge.textContent = `${selectedElements.length} ${selectedElements.length === 1 ? 'Región seleccionada' : 'Regiones seleccionadas'}`;
+
+            const last = selectedElements[selectedElements.length - 1];
+            document.getElementById('regionId').value = selectedElements.length === 1 ? (last.getAttribute('id') || "(Sin ID)") : "(Múltiple selección)";
+
+            const smartBtn = document.getElementById('smartGroupBtn');
+            if (last.parentElement && last.parentElement.tagName.toLowerCase() === 'g' && last.parentElement.id !== 'interactive-map') {
+                smartBtn.classList.remove('hidden');
+            } else {
+                smartBtn.classList.add('hidden');
+            }
+
+            let currentColor = "#ffffff";
+            const style = last.getAttribute('style') || "";
+            const fillMatch = style.match(/fill:\s*(rgb\([^)]+\)|#[a-fA-F0-9]{3,6}|[a-zA-Z]+)/);
+
+            if (fillMatch) {
+                currentColor = rgbToHex(fillMatch[1]) || fillMatch[1];
+            } else if (last.getAttribute('fill')) {
+                currentColor = rgbToHex(last.getAttribute('fill')) || last.getAttribute('fill');
+            }
+
+            if (currentColor.startsWith('#')) {
+                if (currentColor.length === 4) {
+                    currentColor = '#' + currentColor[1] + currentColor[1] + currentColor[2] + currentColor[2] + currentColor[3] + currentColor[3];
+                }
+                try {
+                    document.getElementById("regionColor").value = currentColor;
+                    document.getElementById("colorHexLabel").textContent = currentColor.toUpperCase();
+                } catch(e){}
+            }
+
+            let titleElement = last.querySelector("title");
+            document.getElementById("regionTitle").value = titleElement ? titleElement.textContent : "";
+        }
+
+        function selectEntireBox() {
+            if (selectedElements.length === 0) return;
+            const target = selectedElements[selectedElements.length - 1];
+            const parentGroup = target.parentElement;
+
+            if (!parentGroup || parentGroup.tagName.toLowerCase() !== 'g' || parentGroup.id === 'interactive-map') {
+                alert("Este elemento no pertenece a un recuadro independiente.");
+                return;
+            }
+
+            const children = parentGroup.querySelectorAll('path, rect, polygon, circle');
+            children.forEach(el => {
+                const style = el.getAttribute('style') || "";
+                if(style.includes("fill:none") || el.getAttribute('fill') === 'none') return;
+
+                if (!selectedElements.includes(el)) {
+                    selectedElements.push(el);
+                    el.classList.add('selected-region');
+                }
+            });
+
+            const badge = document.getElementById('selectionBadge');
+            badge.textContent = `${selectedElements.length} Regiones seleccionadas`;
+            saveToStorage();
+        }
+
+        function applyPreset(hexColor) {
+            document.getElementById("regionColor").value = hexColor;
+            updateRegionColor(hexColor);
+        }
+
+        function updateRegionColor(hexColor) {
+            if (selectedElements.length === 0) return;
+            document.getElementById("colorHexLabel").textContent = hexColor.toUpperCase();
+
+            selectedElements.forEach(element => {
+                let styleStr = element.getAttribute("style") || "";
+                if (styleStr.includes("fill:")) {
+                    styleStr = styleStr.replace(/fill:\s*[^;]+/, `fill: ${hexColor}`);
+                    element.setAttribute("style", styleStr);
+                } else {
+                    element.setAttribute("fill", hexColor);
+                }
+            });
+            saveToStorage();
+        }
+
+        function updateRegionTitle(newTitle) {
+            if (selectedElements.length === 0) return;
+
+            selectedElements.forEach(element => {
+                let titleElement = element.querySelector("title");
+                if (titleElement) {
+                    titleElement.textContent = newTitle;
+                } else {
+                    titleElement = document.createElementNS("http://www.w3.org/2000/svg", "title");
+                    titleElement.textContent = newTitle;
+                    element.appendChild(titleElement);
+                }
+            });
+            saveToStorage();
+        }
+
+        function exportModifiedSVG() {
+            const svgElement = document.getElementById('interactive-map');
+            if (!svgElement) return;
+
+            const svgClone = svgElement.cloneNode(true);
+            svgClone.querySelectorAll('.selected-region').forEach(el => el.classList.remove('selected-region'));
+
+            const serializer = new XMLSerializer();
+            let svgString = serializer.serializeToString(svgClone);
+            
+            if(!svgString.startsWith('<?xml')) {
+                svgString = '<?xml version="1.0" encoding="utf-8"?>\n' + svgString;
+            }
+
+            const blob = new Blob([svgString], {type: "image/svg+xml;charset=utf-8"});
+            const url = URL.createObjectURL(blob);
+            const downloadLink = document.createElement("a");
+            downloadLink.href = url;
+            downloadLink.download = "mapa_editado.svg";
+            
+            document.body.appendChild(downloadLink);
+            downloadLink.click();
+            document.body.removeChild(downloadLink);
+        }
+
+        // NUEVO: Renderiza el mapa SVG actual en un Canvas HTML5 y lo baja como PNG de alta calidad
+        function exportAsImage() {
+            const svgElement = document.getElementById('interactive-map');
+            if (!svgElement) return;
+
+            // Limpiamos la selección del clon para que no baje con el borde azul brillante
+            const svgClone = svgElement.cloneNode(true);
+            svgClone.querySelectorAll('.selected-region').forEach(el => el.classList.remove('selected-region'));
+
+            const serializer = new XMLSerializer();
+            const svgString = serializer.serializeToString(svgClone);
+
+            // Obtenemos dimensiones nativas del mapa
+            const bbox = svgElement.getBBox();
+            const width = svgElement.width.baseVal.value || bbox.width || 800;
+            const height = svgElement.height.baseVal.value || bbox.height || 600;
+
+            const canvas = document.createElement('canvas');
+            canvas.width = width * 2; // Multiplicador x2 para nitidez HD
+            canvas.height = height * 2;
+            const ctx = canvas.getContext('2d');
+            ctx.scale(2, 2);
+
+            const img = new Image();
+            const svgBlob = new Blob([svgString], {type: 'image/svg+xml;charset=utf-8'});
+            const url = URL.createObjectURL(svgBlob);
+
+            img.onload = function() {
+                // Pintamos fondo blanco liso para evitar transparencias rotas en JPG/PNG
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0, 0, width, height);
+                ctx.drawImage(img, 0, 0, width, height);
+
+                const pngUrl = canvas.toDataURL('image/png');
+                const downloadLink = document.createElement("a");
+                downloadLink.href = pngUrl;
+                downloadLink.download = "mapa_renderizado.png";
+                
+                document.body.appendChild(downloadLink);
+                downloadLink.click();
+                document.body.removeChild(downloadLink);
+                URL.revokeObjectURL(url);
+            };
+
+            img.src = url;
+        }
+
+        function rgbToHex(rgbStr) {
+            if (!rgbStr || !rgbStr.startsWith('rgb')) return null;
+            const rgbValues = rgbStr.match(/\d+/g);
+            if (!rgbValues || rgbValues.length < 3) return null;
+            
+            const r = parseInt(rgbValues[0]).toString(16).padStart(2, '0');
+            const g = parseInt(rgbValues[1]).toString(16).padStart(2, '0');
+            const b = parseInt(rgbValues[2]).toString(16).padStart(2, '0');
+            return `#${r}${g}${b}`;
+        }
+    </script>
+</body>
+</html>
